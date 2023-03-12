@@ -3,14 +3,12 @@ import {
   CheckCircleIcon,
   CheckIcon,
   CloseIcon,
-  DeleteIcon,
 } from '@chakra-ui/icons';
 import {
   Alert,
   AlertDescription,
   AlertIcon,
   AlertTitle,
-  AspectRatio,
   Badge,
   Box,
   Button,
@@ -38,23 +36,29 @@ import {
   PopoverTrigger,
   Progress,
   StackDivider,
+  Tag,
   Text,
   useDisclosure,
   VStack,
+  Wrap,
+  WrapItem,
 } from '@chakra-ui/react';
 import axios from 'axios';
-import React, { useCallback, useRef } from 'react';
+import React, { useCallback } from 'react';
 import {
   ErrorCode,
   FileError,
   FileRejection,
   useDropzone,
 } from 'react-dropzone';
-import { UploaderProps } from './index.types';
+import {
+  defaultFileTypes,
+  imagesTypes,
+  placeHolders,
+  UploaderProps,
+} from './index.types';
 
 export const ChakraFileUploader = ({ ...ctx }: UploaderProps) => {
-  const ref = useRef<HTMLInputElement>(null);
-
   const initialFocusRef = React.useRef<HTMLButtonElement>(null);
   const [files, setFiles] = React.useState<
     {
@@ -65,9 +69,11 @@ export const ChakraFileUploader = ({ ...ctx }: UploaderProps) => {
   >(
     ctx.defaultFilesPreview?.map((q) => ({
       hasBeenUploaded: true,
-      preview: q.url,
+      preview: imagesTypes.includes(q.url.split('.')[1])
+        ? q.url
+        : placeHolders(`application/${q.url.split('.')[1]}`),
       file: {
-        source: new File([], q.fileName),
+        source: new File([], q.fileName, { type: q.fileName.split('.')[1] }),
         id: q.id,
         size: q.fileSize,
       },
@@ -100,7 +106,10 @@ export const ChakraFileUploader = ({ ...ctx }: UploaderProps) => {
               source: file,
               id: Math.floor(Math.random() * 1000000) + 1000000,
             },
-            preview: URL.createObjectURL(file),
+            preview:
+              file.type.indexOf('image') !== -1
+                ? URL.createObjectURL(file)
+                : placeHolders(file.type)!,
             hasBeenUploaded: false,
           })),
         ]);
@@ -137,7 +146,7 @@ export const ChakraFileUploader = ({ ...ctx }: UploaderProps) => {
           } else {
             ids = response.data;
           }
-          setFiles((files) => [
+          const updatedFiles = [
             ...files
               .filter((q) => !q.hasBeenUploaded)
               .map((q, index) => ({
@@ -145,7 +154,11 @@ export const ChakraFileUploader = ({ ...ctx }: UploaderProps) => {
                 hasBeenUploaded: true,
                 file: { ...q.file, id: ids[index] },
               })),
-          ]);
+          ];
+          setFiles(updatedFiles);
+          if (!!ctx.onUploadSuccess) {
+            ctx.onUploadSuccess(updatedFiles);
+          }
         })
         .catch((error) => {
           setUploadError({ code: error.code, message: error.message });
@@ -157,58 +170,58 @@ export const ChakraFileUploader = ({ ...ctx }: UploaderProps) => {
   const { fileRejections, getRootProps, getInputProps, isDragActive, open } =
     useDropzone({
       onDrop,
-      accept: ctx.acceptedTypes ?? {
-        'image/jpeg': [],
-        'image/png': [],
-        'image/jpg': [],
-        'image/svg': [],
-        'image/webp': [],
-      },
+      accept: ctx.acceptedTypes ?? defaultFileTypes,
       maxFiles: ctx.maxCount ?? 1,
       minSize: ctx.minSize ?? 0,
-      maxSize: ctx.maxSize ?? 20000,
+      maxSize: ctx.maxSize ?? 200000,
     });
 
   return (
     <>
-      <Center
+      <Flex
         flexDir='column'
-        w='full'
+        w={ctx.width ?? 'full'}
         alignItems='center'
-        mx='auto'
         border='1px dotted'
         borderColor='gray.300'
         rounded='lg'
-        bg='gray.100'
+        bg='#f0f5f7'
         p='4'
       >
-        <HStack w='full'>
-          <Button
-            {...ctx.chooseBtnProps}
-            leftIcon={<AttachmentIcon />}
-            onClick={open}
-            size='sm'
-            isDisabled={
-              (uploadProgress > 0 && uploadProgress < 100) ||
-              files.length >= (ctx.maxCount ?? 1)
-            }
-          >
-            {ctx.chooseBtnText ?? 'انتخاب'}
-          </Button>
-          <Button
-            {...ctx.uploadBtnProps}
-            leftIcon={<CheckIcon />}
-            onClick={onUploadStart}
-            isDisabled={
-              files.length === 0 ||
-              (uploadProgress > 0 && uploadProgress < 100) ||
-              files.every((q) => q.hasBeenUploaded)
-            }
-            size='sm'
-          >
-            {ctx.uploadBtnText ?? 'ذخیره'}
-          </Button>
-          {/* <Button
+        <Flex
+          w='full'
+          justifyContent='space-between'
+          rowGap={4}
+          flexDir={{ base: 'column', lg: 'row' }}
+        >
+          <HStack w={{ base: 'full', lg: '50%' }}>
+            <Button
+              size='sm'
+              {...ctx.chooseBtnProps}
+              leftIcon={<AttachmentIcon />}
+              onClick={open}
+              isDisabled={
+                (uploadProgress > 0 && uploadProgress < 100) ||
+                files.length >= (ctx.maxCount ?? 1)
+              }
+            >
+              {ctx.chooseBtnText ?? 'انتخاب'}
+            </Button>
+            <Button
+              size='sm'
+              {...ctx.uploadBtnProps}
+              leftIcon={<CheckIcon />}
+              onClick={onUploadStart}
+              isDisabled={
+                files.length === 0 ||
+                (uploadProgress > 0 && uploadProgress < 100) ||
+                files.every((q) => q.hasBeenUploaded)
+              }
+            >
+              {ctx.uploadBtnText ?? 'ذخیره'}
+            </Button>
+
+            {/* <Button
             leftIcon={<DeleteIcon />}
             onClick={() => setFiles([])}
             isDisabled={
@@ -220,7 +233,39 @@ export const ChakraFileUploader = ({ ...ctx }: UploaderProps) => {
           >
             {ctx.cancelBtnText ?? 'حذف'}
           </Button> */}
-        </HStack>
+          </HStack>
+          <Flex
+            w={{ base: 'full', lg: '50%' }}
+            justifyContent={{ base: 'start', lg: 'end' }}
+          >
+            <Wrap>
+              <WrapItem>
+                <HStack>
+                  <Tag fontSize='xs' colorScheme='blue'>
+                    {Object.keys(ctx.acceptedTypes ?? defaultFileTypes).map(
+                      (q) =>
+                        (ctx.acceptedTypes ?? defaultFileTypes)[q].join(' ')
+                    )}
+                  </Tag>
+                </HStack>
+              </WrapItem>
+              {/* <WrapItem>
+                <HStack>
+                  <Tag fontSize='xs' colorScheme='gray'>
+                    {ctx.maxCount ?? 1}
+                  </Tag>
+                </HStack>
+              </WrapItem> */}
+              <WrapItem>
+                <HStack>
+                  <Tag fontSize='xs' colorScheme='blue' dir='ltr'>
+                    {(ctx.maxSize ?? 200000) / 1000}kb
+                  </Tag>
+                </HStack>
+              </WrapItem>
+            </Wrap>
+          </Flex>
+        </Flex>
         {uploadProgress > 0 && uploadProgress < 100 && (
           <Box w='full' mt='4' pt='0'>
             <Progress hasStripe value={uploadProgress} />
@@ -417,13 +462,13 @@ export const ChakraFileUploader = ({ ...ctx }: UploaderProps) => {
               {isDragActive ? (
                 <Text fontSize='xs'>رها کنید.</Text>
               ) : (
-                <Center p='6' flexDir='column'>
+                <Center p='3' flexDir='column'>
                   <Image
-                    boxSize='75px'
+                    boxSize={{ base: '40px', lg: '75px' }}
                     mb='4'
                     src='data:image/png;base64,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'
                   />
-                  <Text textAlign='center' fontSize='xs'>
+                  <Text textAlign='center' fontSize='2xs'>
                     برای انتخاب فایل کلیک کنید یا فایل را در این محل رها کنید.
                   </Text>
                 </Center>
@@ -431,7 +476,7 @@ export const ChakraFileUploader = ({ ...ctx }: UploaderProps) => {
             </Box>
           </Box>
         )}
-      </Center>
+      </Flex>
       <Modal
         isOpen={!!activePreview}
         onClose={() => {
